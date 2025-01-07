@@ -3,3 +3,4 @@ scikit-learn
 matplotlib
 ipykernel
 seaborn
+python==3.12
