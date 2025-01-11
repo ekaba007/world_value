@@ -2,3 +2,5 @@
 __pycache__
 *.png
 *.zip
+*.zip
+.DS_Store
