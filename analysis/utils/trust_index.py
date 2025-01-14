@@ -211,3 +211,251 @@ def transform_demographcis(df: pd.DataFrame) -> pd.DataFrame:
     df["is_immigrant"]=df['Q265'].map({1: 0, 2: 1})
 
     return df
+
+
+def attach_happiness_index(df: pd.DataFrame) -> pd.DataFrame:
+    
+    # Define variable groups
+    happiness_questions = [f"Q{i}" for i in range(46, 56)]
+    baseline_happiness = ['Q46'] 
+    health = ['Q47']  
+    freedom = ['Q48']  
+    baseline_satisfaction = ['Q49']  
+    financial_satisfaction = ['Q50']  
+    hardships_questions = [f"Q{i}" for i in range(51, 56)]  # Composite index
+    standard_parents = ['Q56']  # Standalone variable, categorial
+
+    # Copy the DataFrame to work on
+    result = df.copy()
+
+    # 1. Impute missing values with the median -------------------------------------
+    # Create a median dictionary for countries
+    median_dict = {}
+    countries = result['B_COUNTRY'].unique()
+
+    # Reverse the scale for happiness questions
+    for hq in baseline_happiness:
+        result[hq] = result[hq].where(result[hq] <= 0, 4 + 1 - result[hq])
+    # Reverse the scale for health questions
+    for hq in health:
+        result[hq] = result[hq].where(result[hq] <= 0, 5 + 1 - result[hq])
+    # Reverse the scale for hardships questions
+    for hq in hardships_questions:
+        result[hq] = result[hq].where(result[hq] <= 0, 4 + 1 - result[hq])
+
+    for ct in countries:
+        median_dict[ct] = {}
+        for hq in happiness_questions:
+            # Calculate median for each question within each country
+            median_dict[ct][hq] = result.loc[(result[hq] > 0) & (result['B_COUNTRY'] == ct), hq].median()
+
+    # Populate the DataFrame with the imputed values
+    for hq in happiness_questions:
+        result[hq] = result.apply(
+            lambda row: median_dict[row['B_COUNTRY']][hq] if row[hq] <= 0 else row[hq], axis=1
+        )
+
+    # 2. Normalize happiness_questions using Min-Max Scaling ---------------------
+    scaler = MinMaxScaler()
+    scaler.fit(result.loc[:, happiness_questions])
+    result.loc[:, happiness_questions] = scaler.transform(result.loc[:, happiness_questions])
+
+    # 3. Convert 'Q56' to dummy variables -----------------------------------------
+    # Replace invalid values in Q56
+    result['Q56'] = result['Q56'].where(result['Q56'] > 0, pd.NA)
+
+    # country based imputation with mode
+    result['Q56'] = (
+        result.groupby('B_COUNTRY')['Q56']
+        .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
+        .reset_index(level=0, drop=True)  
+    )
+    # Generate dummy variables for Q56 with explicit integer type
+    dummies = pd.get_dummies(result['Q56'], prefix='standard_parents').astype(int)
+
+    # Rename the dummy columns
+    dummies.rename(columns={
+        'standard_parents_1.0': 'standard_parents_better',
+        'standard_parents_2.0': 'standard_parents_worse',
+        'standard_parents_3.0': 'standard_parents_same'
+    }, inplace=True)
+
+    # Attach the dummy variables to the DataFrame
+    result = pd.concat([result, dummies], axis=1)
+
+    # 4. Attach standalone and composite features ---------------------------------
+    result['baseline_happiness'] = result.loc[:, baseline_happiness]
+    result['health'] = result.loc[:, health]
+    result['freedom'] = result.loc[:, freedom]
+    result['baseline_satisfaction'] = result.loc[:, baseline_satisfaction]
+    result['financial_satisfaction'] = result.loc[:, financial_satisfaction]
+    # Composite variable: Hardships 
+    result['hardships_questions'] = result.loc[:, hardships_questions].mean(axis=1)
+
+    return result
+
+
+def attach_security_index(df: pd.DataFrame) -> pd.DataFrame:
+
+    # Define variable groups
+    security_question = [f"Q{i}" for i in range(131, 139)] + [f"Q{i}" for i in range(142, 144)] + [f"Q{i}" for i in range(146, 149)]
+
+    baseline_security = ['Q131']
+    security_neighborhood = [f"Q{i}" for i in range(132, 139)]
+    security_financial = [f"Q{i}" for i in range(142, 144)]
+    security_war = [f"Q{i}" for i in range(146, 149)]
+    
+    # dummies
+    security_actions_money = ['Q139']
+    security_actions_night = ['Q140']
+    security_actions_weapon = ['Q141']
+    victim_respondent = ['Q144']
+    victim_family = ['Q145']
+    war_yes_no = ['Q151']
+    yes_no = ['Q139', 'Q140', 'Q141', 'Q144', 'Q145', 'Q151']
+
+    result = df.copy()
+
+    # 1. Impute missing values with the median -------------------------------------
+    # Create a median dictionary for countries
+    median_dict = {}
+    mode_dict = {}
+    countries = result['B_COUNTRY'].unique()
+
+    # Reverse the scale for baseline_security
+    for tq in baseline_security:
+        result[tq] = result[tq].where(result[tq] <= 0, 4 + 1 - result[tq])
+
+    for ct in countries:
+        median_dict[ct] = {}
+        for tq in security_question:
+            # Calculate median for each question within each country
+            median_dict[ct][tq] = result.loc[(result[tq] > 0) & (result['B_COUNTRY'] == ct), tq].median()
+
+    # Populate the DataFrame with the imputed values
+    for tq in security_question:
+        result[tq] = result.apply(
+            lambda row: median_dict[row['B_COUNTRY']][tq] if row[tq] <= 0 else row[tq], axis=1
+        )
+
+    # 2. Normalize using Min-Max Scaling ---------------------
+    scaler = MinMaxScaler()
+    scaler.fit(result.loc[:, security_question])
+    result.loc[:, security_question] = scaler.transform(result.loc[:, security_question])
+
+    # 3. create DUMMIES 
+    for d in yes_no:
+        result[d] = result[d].where(result[d] > 0, pd.NA)
+
+        # Country-based imputation with mode
+        result[d] = (
+            result.groupby('B_COUNTRY')[d]
+            .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
+            .reset_index(level=0, drop=True)  
+        )
+        # Generate dummy variables 
+        dummies = pd.get_dummies(result[d], prefix=d).astype(int)
+
+        # Attach the dummy variables to the DataFrame
+        result = pd.concat([result, dummies], axis=1)
+
+    # Rename the dummy columns, this whole thing is awful help
+    result.rename(columns={
+        'Q139_1.0': 'security_actions_money_yes',
+        'Q139_2.0': 'security_actions_money_no',
+        'Q140_1.0': 'security_actions_night_yes',
+        'Q140_2.0': 'security_actions_night_no',
+        'Q141_1.0': 'security_actions_weapon_yes',
+        'Q141_2.0': 'security_actions_weapon_no',
+        'Q144_1.0': 'victim_respondent_yes',
+        'Q144_2.0': 'victim_respondent_no',
+        'Q145_1.0': 'victim_family_yes',
+        'Q145_2.0': 'victim_family_no',
+        'Q151_1.0': 'war_yes',
+        'Q151_2.0': 'war_no',
+    }, inplace=True)
+
+    # 4. Attach standalone and composite features ---------------------------------
+    result['baseline_security'] = result.loc[:, baseline_security]
+    result['security_neighborhood'] = result.loc[:, security_neighborhood].mean(axis=1)
+    result['security_financial'] = result.loc[:, security_financial].mean(axis=1)
+    result['security_war'] = result.loc[:, security_war].mean(axis=1)
+
+    return result
+
+
+def attach_education_index(df: pd.DataFrame) -> pd.DataFrame:
+    education = ['Q275']
+    education_mother = ['Q277']
+    education_father = ['Q278']
+
+    education_questions = ['Q275', 'Q277', 'Q278']
+
+    result = df.copy()
+
+    # 1. Impute missing values with the median -------------------------------------
+    # Create a median dictionary for countries
+    median_dict = {}
+    countries = result['B_COUNTRY'].unique()
+
+    for ct in countries:
+        median_dict[ct] = {}
+        for e in education_questions:
+            # Calculate median for each question within each country
+            median_dict[ct][e] = result.loc[(result[e] >= 0) & (result['B_COUNTRY'] == ct), e].median()
+
+    # Populate the DataFrame with the imputed values
+    for e in education_questions:
+        result[e] = result.apply(
+            lambda row: median_dict[row['B_COUNTRY']][e] if row[e] < 0 else row[e], axis=1
+        )
+
+    # 2. Attach standalone and composite features ---------------------------------
+    result['education'] = result.loc[:, education]
+    result['education_mother'] = result.loc[:, education_mother]
+    result['education_father'] = result.loc[:, education_father]
+    
+    return result
+
+def attach_income_index(df: pd.DataFrame) -> pd.DataFrame:
+    chief_wage_earner = ['Q285']
+    income_group = ['Q288']
+
+    result = df.copy()
+
+    # 1. Impute missing values with the median -------------------------------------
+    # Create a median dictionary for countries
+    median_dict = {}
+    countries = result['B_COUNTRY'].unique()
+
+    for ct in countries:
+        median_dict[ct] = {}
+        for e in income_group:
+            # Calculate median for each question within each country
+            median_dict[ct][e] = result.loc[(result[e] > 0) & (result['B_COUNTRY'] == ct), e].median()
+
+    # Populate the DataFrame with the imputed values
+    for e in income_group:
+        result[e] = result.apply(
+            lambda row: median_dict[row['B_COUNTRY']][e] if row[e] <= 0 else row[e], axis=1
+        )
+
+    # Country-based imputation with mode
+    result['Q285'] = result['Q285'].where(result['Q285'] > 0, pd.NA)
+
+    result['Q285'] = (
+        result.groupby('B_COUNTRY')['Q285']
+        .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
+        .reset_index(level=0, drop=True)  
+    )
+
+    # 2. Normalize using Min-Max Scaling ---------------------
+    scaler = MinMaxScaler()
+    scaler.fit(result.loc[:, income_group])
+    result.loc[:, income_group] = scaler.transform(result.loc[:, income_group])
+
+    # 3. Attach features ---------------------------------
+    result['chief_wage_earner_yes'] = result['Q285'].map({1: 0, 2: 1}) 
+    result['income_group'] = result.loc[:, income_group]
+
+    return result
