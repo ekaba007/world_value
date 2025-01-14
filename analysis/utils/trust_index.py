@@ -195,11 +195,10 @@ def attach_corruption_index(df: pd.DataFrame) -> pd.DataFrame:
   return result
 
 def transform_demographcis(df: pd.DataFrame) -> pd.DataFrame:
-    
+    df = df.copy()
     # must have valid gender value
     df = df[df["Q260"]>0]
-    # 1 is male 2 is female
-    df['gender'] = df['Q260'].map({'1': 1, '2': 0})
+    df['gender'] = df['Q260'].map({1: 1, 2: 0})# 1 is male 2 is female
     # must have valid age
     df = df[df["Q262"]>0]
 
@@ -207,8 +206,8 @@ def transform_demographcis(df: pd.DataFrame) -> pd.DataFrame:
     # must have valid values about parental and individual immigration status
     df = df[(df["Q263"]>0) & (df["Q264"]>0)&(df["Q265"]>0)]
     # create binary variables for immigration status of family and self
-    df["mother_immigrant"]=df['Q263'].map({'1': 0, '2': 1})
-    df["father_immigrant"]=df['Q264'].map({'1': 0, '2': 1})
-    df["is_immigrant"]=df['Q265'].map({'1': 0, '2': 1})
+    df["mother_immigrant"]=df['Q263'].map({1: 0, 2: 1})
+    df["father_immigrant"]=df['Q264'].map({1: 0, 2: 1})
+    df["is_immigrant"]=df['Q265'].map({1: 0, 2: 1})
 
     return df
