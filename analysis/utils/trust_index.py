@@ -15,8 +15,8 @@ def attach_distrust_index(df: pd.DataFrame) -> pd.DataFrame:
   Returns:
     pd.DataFrame: Processed dataframe with the distrust indeces in `base_distrust_index`, `national_distrust_index`, `international_distrust_index`
   """
-  trust_questions = [f"Q{i}" for i in range(53, 90)]
-  base_trust_qustions = [f"Q{i}" for i in range(53, 64)]
+  trust_questions = [f"Q{i}" for i in range(58, 90)]
+  base_trust_qustions = [f"Q{i}" for i in range(58, 64)]
   national_trust_questions  = [f"Q{i}" for i in range(64, 82)]
   international_trust_questions = [f"Q{i}" for i in range(82, 90)]
 
@@ -228,10 +228,39 @@ def attach_happiness_index(df: pd.DataFrame) -> pd.DataFrame:
     # Copy the DataFrame to work on
     result = df.copy()
 
-    # 1. Impute missing values with the median -------------------------------------
+    # 1. Convert 'Q56' to dummy variables -----------------------------------------
+    # Replace invalid values in Q56
+    result['Q56'] = result['Q56'].where(result['Q56'] > 0, pd.NA)
+
+    # country based imputation with mode
+    result['Q56'] = (
+        result.groupby('B_COUNTRY_ALPHA')['Q56']
+        .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
+        .reset_index(level=0, drop=True)  
+    )
+
+    # Generate dummy variables for Q56 with explicit integer type
+    dummies = pd.get_dummies(result['Q56'], prefix='standard_parents').astype(int)
+
+    # Generate dummy variables for Q56 with explicit integer type
+    dummies = pd.get_dummies(result['Q56'], prefix='standard_parents').astype(int)
+
+    # Rename the dummy columns
+    dummies.rename(columns={
+        'standard_parents_1.0': 'standard_parents_better',
+        'standard_parents_2.0': 'standard_parents_worse',
+        'standard_parents_3.0': 'standard_parents_same'
+    }, inplace=True)
+
+    dummies = dummies.drop(columns=['standard_parents_same'])
+
+    # Attach the dummy variables to the DataFrame
+    result = pd.concat([result, dummies], axis=1)
+
+    # 2. Impute missing values with the median -------------------------------------
     # Create a median dictionary for countries
     median_dict = {}
-    countries = result['B_COUNTRY'].unique()
+    countries = result['B_COUNTRY_ALPHA'].unique()
 
     # Reverse the scale for happiness questions
     for hq in baseline_happiness:
@@ -247,41 +276,18 @@ def attach_happiness_index(df: pd.DataFrame) -> pd.DataFrame:
         median_dict[ct] = {}
         for hq in happiness_questions:
             # Calculate median for each question within each country
-            median_dict[ct][hq] = result.loc[(result[hq] > 0) & (result['B_COUNTRY'] == ct), hq].median()
+            median_dict[ct][hq] = result.loc[(result[hq] > 0) & (result['B_COUNTRY_ALPHA'] == ct), hq].median()
 
     # Populate the DataFrame with the imputed values
     for hq in happiness_questions:
         result[hq] = result.apply(
-            lambda row: median_dict[row['B_COUNTRY']][hq] if row[hq] <= 0 else row[hq], axis=1
+            lambda row: median_dict[row['B_COUNTRY_ALPHA']][hq] if row[hq] <= 0 else row[hq], axis=1
         )
 
-    # 2. Normalize happiness_questions using Min-Max Scaling ---------------------
+    # 3. Normalize happiness_questions using Min-Max Scaling ---------------------
     scaler = MinMaxScaler()
     scaler.fit(result.loc[:, happiness_questions])
     result.loc[:, happiness_questions] = scaler.transform(result.loc[:, happiness_questions])
-
-    # 3. Convert 'Q56' to dummy variables -----------------------------------------
-    # Replace invalid values in Q56
-    result['Q56'] = result['Q56'].where(result['Q56'] > 0, pd.NA)
-
-    # country based imputation with mode
-    result['Q56'] = (
-        result.groupby('B_COUNTRY')['Q56']
-        .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
-        .reset_index(level=0, drop=True)  
-    )
-    # Generate dummy variables for Q56 with explicit integer type
-    dummies = pd.get_dummies(result['Q56'], prefix='standard_parents').astype(int)
-
-    # Rename the dummy columns
-    dummies.rename(columns={
-        'standard_parents_1.0': 'standard_parents_better',
-        'standard_parents_2.0': 'standard_parents_worse',
-        'standard_parents_3.0': 'standard_parents_same'
-    }, inplace=True)
-
-    # Attach the dummy variables to the DataFrame
-    result = pd.concat([result, dummies], axis=1)
 
     # 4. Attach standalone and composite features ---------------------------------
     result['baseline_happiness'] = result.loc[:, baseline_happiness]
@@ -354,7 +360,7 @@ def attach_security_index(df: pd.DataFrame) -> pd.DataFrame:
             .reset_index(level=0, drop=True)  
         )
         # Generate dummy variables 
-        dummies = pd.get_dummies(result[d], prefix=d).astype(int)
+        dummies = pd.get_dummies(result[d], prefix=d, drop_first=True).astype(int)
 
         # Attach the dummy variables to the DataFrame
         result = pd.concat([result, dummies], axis=1)
