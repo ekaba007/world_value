@@ -4,20 +4,22 @@ import openpyxl
 import trust_index as ti
 
 # Read in wave (df) and time series (ts) data
-os.chdir('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/wvs/')
+# we should keep the path general, please change dir in terminal so we dont need to change that everytime in the code
+#os.chdir('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/wvs/')
+# instead use in prompt 'cd C:\Users\...\world_value_survey'
 print("Reading in wave data..")
-df = pd.read_csv('WVS_Cross_National.csv')
+df = pd.read_csv('analysis/data/wvs/WVS_Cross_National.csv')
 print("Reading in time series data...")
-ts = pd.read_csv('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/wvs/WVS_Time_Series.csv')
+ts = pd.read_csv('analysis/data/wvs/WVS_Time_Series.csv')
 
 # Read in two separate instances of WPFI
 print("Reading in world press freedom index...")
-os.chdir('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/additional/')
-wpf = pd.read_excel('RWB-PFI.xlsx')
-wpf_ts = pd.read_excel('RWB-PFI.xlsx')
+#os.chdir('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/additional/')
+wpf = pd.read_excel('analysis/data/additional/RWB-PFI.xlsx')
+wpf_ts = pd.read_excel('analysis/data/additional/RWB-PFI.xlsx')
 
 def clean_wpfi_wave(wpf: pd.DataFrame) -> pd.DataFrame:
-    countries = ['AUS','CAN','GBR','DEU','NLD','USA']
+    countries = ['AUS','CAN','DEU','NLD','USA']
     wpf = wpf[wpf['Economy ISO3'].isin(countries)]
     # Use rank instead of index because it is the same measurement over time
     # # Index changed around 2013 to be calculated completely differently
@@ -38,7 +40,7 @@ def clean_wpfi_wave(wpf: pd.DataFrame) -> pd.DataFrame:
 
 def merge_wave_wpfi(df: pd.DataFrame, pivoted_df: pd.DataFrame) -> pd.DataFrame:
     # Filter for Countries in "Western Europe" as defined by the European Union (https://eur-lex.europa.eu/browse/eurovoc.html?params=72,7206,913#arrow_913)
-    countries = ['AUS','CAN','GBR','DEU','NLD','USA']
+    countries = ['AUS','CAN','DEU','NLD','USA']
     # Belgium, Ireland, Liechtenstein, Luxembourg, and Monaco do not have data in wave 7
     df = df[df['B_COUNTRY_ALPHA'].isin(countries)]
     # Perform the left join on 'ISO' and 'Year'
@@ -101,11 +103,19 @@ def run_preprocessing(df: pd.DataFrame, wpf:pd.DataFrame, ts: pd.DataFrame, wpf_
     merged_df = ti.attach_pol_pref(merged_df)
     # Transform demographics
     merged_df = ti.transform_demographcis(merged_df)
+    # Attach Happniess Index
+    merged_df = ti.attach_happiness_index(merged_df)
+    # Attach Security Index
+    merged_df = ti.attach_security_index(merged_df)
+    # Attach Education Index
+    merged_df = ti.attach_education_index(merged_df)
+    # Attach Income Index
+    merged_df = ti.attach_income_index(merged_df)   
     print("Writing Data to .csv files..")
     #Write the preprocessed wave data to a csv
-    merged_df.to_csv('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/wvs/wave7.csv')
+    merged_df.to_csv('analysis/data/wvs/wave7.csv')
     #Write the preprocessed ts data to a csv
-    merged_ts.to_csv('/Users/carterhogan/CaseStudies/world_value_survey/analysis/data/wvs/time_series.csv')
+    merged_ts.to_csv('analysis/data/wvs/time_series.csv')
 
 print("Executing Preprocessing....")
 run_preprocessing(df,wpf,ts,wpf_ts)
