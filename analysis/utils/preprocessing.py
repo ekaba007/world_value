@@ -23,7 +23,7 @@ def clean_wpfi_wave(wpf: pd.DataFrame) -> pd.DataFrame:
     wpf = wpf[wpf['Economy ISO3'].isin(countries)]
     # Use rank instead of index because it is the same measurement over time
     # # Index changed around 2013 to be calculated completely differently
-    wpf = wpf[wpf['Indicator ID'] != 'RWB.PFI.INDEX']
+    wpf = wpf[wpf['Indicator ID'] != 'RWB.PFI.RANK']
     wpf = pd.concat([wpf.iloc[:, :2], wpf.iloc[:, -7:]], axis=1)
     main_columns = wpf.iloc[:, :2]  # First two column
     year_columns = wpf.iloc[:, -7:]  # Last seven columns
@@ -57,7 +57,7 @@ def clean_wpfi_ts(wpf_ts: pd.DataFrame) -> pd.DataFrame:
     main_columns = wpf_ts.iloc[:, :2]  # First two columns (Rank and Country)
     year_columns = wpf_ts.iloc[:, -21:]  # Last 21 columns (2002-2023)
     wpf_ts = wpf_ts[wpf_ts['Economy ISO3'] == "DEU"]
-    wpf_ts = wpf_ts[wpf_ts['Indicator ID'] != 'RWB.PFI.INDEX']
+    wpf_ts = wpf_ts[wpf_ts['Indicator ID'] != 'RWB.PFI.RANK']
     # pivot for the time series
     pivoted_wpf = pd.melt(
         wpf_ts, 
