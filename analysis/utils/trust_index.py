@@ -118,33 +118,12 @@ def attach_pol_pref(df: pd.DataFrame) -> pd.DataFrame:
   """
 
   pol_pref = ["Q240"]
-
-  result = df.copy()
-
-  # 1. imputing with median --------------------------------------------
-  # create a median dict with all the relevant values
-  median_dict = {}
-  countries = result.B_COUNTRY.unique()
-
-  for ct in countries:
-      median_dict[ct] = {}
-
-  for tq in pol_pref:
-      for ct in countries:
-          median_dict[ct][tq] = result.loc[(result[tq] > 0) & (result.B_COUNTRY == ct), tq].median()
+  #ensure we only use valid observations of political preference
+  df = df[df['Q240'] > 0]
+  pol_dummies = pd.get_dummies(df['Q240'], prefix= "pol_value").astype(int)
+  df = pd.concat([df,pol_dummies], axis = 1)
   
-  # now populate the dataframe with the median values
-  for tq in pol_pref:
-      result[tq] = result.loc[:, [tq, "B_COUNTRY"]].apply(lambda row: median_dict[row["B_COUNTRY"]][tq] if row[tq] <= 0 else row[tq], axis=1)
-    
-  # 2. Minmax scaling --------------------------------------------
-  scaler = MinMaxScaler()
-  scaler.fit(result.loc[:, pol_pref])
-  result.loc[:, pol_pref] = scaler.transform(result.loc[:, pol_pref])
-
-  # 3. Creating political preference variable --------------------------------------------
-  result["pol_pref"] = result.loc[:, pol_pref]
-  return result
+  return df
 
 def attach_corruption_index(df: pd.DataFrame) -> pd.DataFrame:
   """
@@ -214,16 +193,15 @@ def transform_demographcis(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def attach_happiness_index(df: pd.DataFrame) -> pd.DataFrame:
+    #filter for valid happiness values
+    df = df[df['Q46']>0] 
+    # create categorical variables
+    hap_dummies = pd.get_dummies(df['Q46'], prefix= "happ_").astype(int)
+    df = pd.concat([df,hap_dummies], axis = 1)
     
-    # Define variable groups
-    happiness_questions = [f"Q{i}" for i in range(46, 56)]
-    baseline_happiness = ['Q46'] 
-    health = ['Q47']  
-    freedom = ['Q48']  
-    baseline_satisfaction = ['Q49']  
-    financial_satisfaction = ['Q50']  
+    
     hardships_questions = [f"Q{i}" for i in range(51, 56)]  # Composite index
-    standard_parents = ['Q56']  # Standalone variable, categorial
+   
 
     # Copy the DataFrame to work on
     result = df.copy()
@@ -262,39 +240,28 @@ def attach_happiness_index(df: pd.DataFrame) -> pd.DataFrame:
     median_dict = {}
     countries = result['B_COUNTRY_ALPHA'].unique()
 
-    # Reverse the scale for happiness questions
-    for hq in baseline_happiness:
-        result[hq] = result[hq].where(result[hq] <= 0, 4 + 1 - result[hq])
-    # Reverse the scale for health questions
-    for hq in health:
-        result[hq] = result[hq].where(result[hq] <= 0, 5 + 1 - result[hq])
     # Reverse the scale for hardships questions
     for hq in hardships_questions:
         result[hq] = result[hq].where(result[hq] <= 0, 4 + 1 - result[hq])
 
     for ct in countries:
         median_dict[ct] = {}
-        for hq in happiness_questions:
+        for hq in hardships_questions:
             # Calculate median for each question within each country
             median_dict[ct][hq] = result.loc[(result[hq] > 0) & (result['B_COUNTRY_ALPHA'] == ct), hq].median()
 
     # Populate the DataFrame with the imputed values
-    for hq in happiness_questions:
+    for hq in hardships_questions:
         result[hq] = result.apply(
             lambda row: median_dict[row['B_COUNTRY_ALPHA']][hq] if row[hq] <= 0 else row[hq], axis=1
         )
 
     # 3. Normalize happiness_questions using Min-Max Scaling ---------------------
     scaler = MinMaxScaler()
-    scaler.fit(result.loc[:, happiness_questions])
-    result.loc[:, happiness_questions] = scaler.transform(result.loc[:, happiness_questions])
+    scaler.fit(result.loc[:, hardships_questions])
+    result.loc[:, hardships_questions] = scaler.transform(result.loc[:, hardships_questions])
 
-    # 4. Attach standalone and composite features ---------------------------------
-    result['baseline_happiness'] = result.loc[:, baseline_happiness]
-    result['health'] = result.loc[:, health]
-    result['freedom'] = result.loc[:, freedom]
-    result['baseline_satisfaction'] = result.loc[:, baseline_satisfaction]
-    result['financial_satisfaction'] = result.loc[:, financial_satisfaction]
+
     # Composite variable: Hardships 
     result['hardships_questions'] = result.loc[:, hardships_questions].mean(axis=1)
 
@@ -424,44 +391,11 @@ def attach_education_index(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 def attach_income_index(df: pd.DataFrame) -> pd.DataFrame:
-    chief_wage_earner = ['Q285']
-    income_group = ['Q288']
+    df = df[df['Q288']>0]
+    avg_inc = df['Q288'].mean()
 
-    result = df.copy()
+    # define a two binary variables for income and happiness, where 1 represents above average and 0 below
 
-    # 1. Impute missing values with the median -------------------------------------
-    # Create a median dictionary for countries
-    median_dict = {}
-    countries = result['B_COUNTRY'].unique()
+    df = df.assign(above_avg_inc  = (df['Q288']>=avg_inc).astype(int))
 
-    for ct in countries:
-        median_dict[ct] = {}
-        for e in income_group:
-            # Calculate median for each question within each country
-            median_dict[ct][e] = result.loc[(result[e] > 0) & (result['B_COUNTRY'] == ct), e].median()
-
-    # Populate the DataFrame with the imputed values
-    for e in income_group:
-        result[e] = result.apply(
-            lambda row: median_dict[row['B_COUNTRY']][e] if row[e] <= 0 else row[e], axis=1
-        )
-
-    # Country-based imputation with mode
-    result['Q285'] = result['Q285'].where(result['Q285'] > 0, pd.NA)
-
-    result['Q285'] = (
-        result.groupby('B_COUNTRY')['Q285']
-        .apply(lambda x: x.fillna(x.mode()[0] if not x.mode().empty else 0))
-        .reset_index(level=0, drop=True)  
-    )
-
-    # 2. Normalize using Min-Max Scaling ---------------------
-    scaler = MinMaxScaler()
-    scaler.fit(result.loc[:, income_group])
-    result.loc[:, income_group] = scaler.transform(result.loc[:, income_group])
-
-    # 3. Attach features ---------------------------------
-    result['chief_wage_earner_yes'] = result['Q285'].map({1: 0, 2: 1}) 
-    result['income_group'] = result.loc[:, income_group]
-
-    return result
+    return df
