@@ -99,11 +99,22 @@ def run_preprocessing(df: pd.DataFrame, wpf:pd.DataFrame, ts: pd.DataFrame, wpf_
     merged_df = ti.attach_corruption_index(merged_df)
     # Attach Migration Index
     merged_df = ti.attach_migration_index(merged_df)
-    # Attach Political Preference
-    merged_df = ti.attach_pol_pref(merged_df)
+    # Filter for individuals with valid political preferences, happiness values, and income
+    merged_df = merged_df[(merged_df['Q240'] > 0) & (merged_df['Q46']>0) & (merged_df['Q288']>0)]
+    # Make political preference a dummy variable
+    pol_dummies = pd.get_dummies(merged_df['Q240'], prefix= "pol_value")
+    merged_df = pd.concat([merged_df,pol_dummies], axis = 1)
+    # Now find define average happiness and average income
+    avg_hap = merged_df['Q46'].mean()
+    avg_inc = merged_df['Q288'].mean()
+
+    # define a two binary variables for income and happiness, where 1 represents above average and 0 below
+
+    merged_df = merged_df.assign(above_avg_inc  = merged_df['Q288']>=avg_inc)
+    merged_df = merged_df.assign(above_avg_hap  = merged_df['Q46']>=avg_hap)
     # Transform demographics
     merged_df = ti.transform_demographcis(merged_df)
-    # Attach Happniess Index
+    # Dummies for happiness, below and above average 
     merged_df = ti.attach_happiness_index(merged_df)
     # Attach Security Index
     merged_df = ti.attach_security_index(merged_df)
