@@ -1,0 +1,58 @@
+---
+title: "Jonckheere terpstra test applied"
+author: "Carsten Stahl"
+date: "2025-02-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(PMCMRplus)
+```
+
+## Verifying the trend in the WVS time series data
+One part of our analysis deals with verifying that there is a downward trend in the distrust index over time. For this, we will use the Jonckheere Terpstra test, which is a non-parametric method for testing for trends.
+
+The reason for us pivoting to this test statistic is that the previous F-Test required heterosedasticity, which wasn't given in the data (tested with Breusch Pagan). With Jonckheere Terpstra we lose control over the concrete functional form of the trend but also gain credibility, because the underlying assumption are much easier to verify.
+
+### Hypothesis
+$$
+\begin{align*}
+&H_0: F_1(x) = \cdots = F_k(x)\\
+&H_1: F_1(x) \geq \cdots \geq F_k(x)
+\end{align*}
+$$
+
+### Test statistic
+The core idea of this test statistic is, that every sample is compared to the partners, which are considered larger.
+$$
+U_{ij} := \sum_{\alpha_i=1}^{m_i}\sum_{\alpha_j =1}^{m_j} \Psi(X_{i\alpha_i}-X_{j\alpha_j}) \hspace{1em} \text{with}\hspace{1em} \Psi(x) := \begin{cases}
+    1 &\text{ if } x>0\\
+    0.5 &\text{ if } x=0\\
+    0 &\text{ if }x <0
+\end{cases}
+$$
+
+$$
+J = \sum_{i=1}^k \sum_{j=i+1}^k U_{ij}
+$$
+
+### Further literature
+- A. R. Jonckheere (1954). A distribution-free k-sample test against ordered alternatives. Biometrica, 41, 133-145. (Original Paper)
+- L. Sachs (1997), Angewandte Statistik. Berlin: Springer. (Implementation used in this notebook)
+- Büning, H., & Trenkler, G. (2013). Nichtparametrische statistische methoden. de Gruyter. (Digestible overview of the test statistic)
+
+## Application
+This code is not designed to be run in the project folder. Hence the csv, which is fetched here does not exist.
+
+```{r}
+tf = read.csv("./data/wvs/time_series_trust.csv")
+head(tf)
+```
+Applying jonckheere
+```{r}
+jonckheereTest(tf$national_distrust_index,
+               tf$wave,
+               alternative="less")
+```
+
