@@ -399,3 +399,18 @@ def attach_income_index(df: pd.DataFrame) -> pd.DataFrame:
     df = df.assign(above_avg_inc  = (df['Q288']>=avg_inc).astype(int))
 
     return df
+
+def attach_country_dummies(df):
+    # Define the list of countries to include
+    COUNTRIES_TO_KEEP = ['AUS','CAN','DEU','NLD','USA']
+    
+    # Filter the DataFrame
+    df = df[df['B_COUNTRY_ALPHA'].isin(COUNTRIES_TO_KEEP)].copy()
+    
+    # create dummies
+    dummies = pd.get_dummies(df['B_COUNTRY_ALPHA'], prefix='country').astype(int)
+    df = pd.concat([df, dummies], axis=1)
+    
+    # drop reference class
+    df = df.drop(['country_DEU'], axis=1)
+    return df

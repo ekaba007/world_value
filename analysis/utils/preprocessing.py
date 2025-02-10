@@ -111,8 +111,9 @@ def run_preprocessing(df: pd.DataFrame, wpf:pd.DataFrame, ts: pd.DataFrame, wpf_
     merged_df = ti.attach_security_index(merged_df)
     # Attach Education Index
     merged_df = ti.attach_education_index(merged_df)
-    # Attach Income Index
-    merged_df = ti.attach_income_index(merged_df)   
+    # Attach Country dummies
+    merged_df = ti.attach_corruption_index(merged_df)
+
     print("Writing Data to .csv files..")
     #Write the preprocessed wave data to a csv
     merged_df.to_csv('analysis/data/wvs/wave7.csv')
